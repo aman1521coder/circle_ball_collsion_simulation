@@ -9,6 +9,53 @@ struct Ball {
     vx: f32,
     vy: f32,
 }
+struct   Big_Circle{
+    radius: f32,
+    x: f32,
+    y: f32,
+    vx: f32,
+    vy: f32,
+}
+impl  Big_Circle {
+    fn new(radius: f32, x: f32, y: f32, vx: f32, vy: f32) -> Big_Circle {
+        Big_Circle {
+            radius,
+            x,
+            y,
+            vx,
+            vy,
+        }
+    }
+    fn move_circle_right(&mut self) {
+        self.x += self.vx;
+    }
+    fn move_circle_left(&mut self) {
+        self.x -= self.vx;
+    }
+    fn move_circle_up(&mut self){
+        self.y-=self.vx
+    }
+    fn move_circle_down(&mut self){
+        self.y+=self.vx
+    }
+    fn border_check(&mut self){
+        let width=macroquad::window::screen_width();
+        let height=macroquad::window::screen_height();
+        if self.x+self.radius>width{
+            self.x=width-self.radius;
+        }
+        if self.x-self.radius<0.0{
+            self.x=self.radius;
+        }
+        if self.y+self.radius>height{
+            self.y=height-self.radius;
+        }
+        if self.y-self.radius<0.0{
+            self.y=self.radius;
+        }
+    }
+
+}
 
 impl Ball {
     fn new(radius: f32, x: f32, y: f32, vx: f32, vy: f32) -> Ball {
@@ -22,88 +69,100 @@ impl Ball {
     }
 }
 
+
 impl Ball {
-    fn move_ball_right(&mut self) {
-        self.x += self.vx;
-    }
-    fn move_ball_left(&mut self) {
-        self.x -= self.vx;
-    }   
-    fn move_ball_down(&mut self) {
-        self.y += self.vy;
-    }
-    fn move_ball_up(&mut self) {
-        self.y -= self.vy;
-    }
 
-    // Checks collision against the outer circle ring boundary
-    fn check_collision(&mut self)->(f32,f32) {
-        let center_x = 400.0;
-        let center_y = 300.0;
-        let container_radius = 200.0;
-               let gravity=500.0;
-               let damping=0.5;
-            self.vy+=gravity*get_frame_time();
-            self.x += self.vx*get_frame_time();
-            self.y += self.vy*get_frame_time();
-        let dx = self.x - center_x;
-        let dy = self.y - center_y;
-        let distance = (dx.powf(2.0) + dy.powf(2.0)).sqrt();
+   
 
-        // Collision happens when the ball's outer edge passes the container's inner edge
-        if distance + self.radius > container_radius {
-            // 1. Calculate the surface normal vector pointing inward
-            let nx = dx / distance;
-            let ny = dy / distance;
-           let dot =nx*self.vx + ny*self.vy;
-           let new_vx= self.vx - 2.0 * dot * nx;
-           let new_vy= self.vy - 2.0 * dot * ny;
-           self.vx=new_vx;
-           self.vy=new_vy;
-            // 2. Push the ball back inside so it doesn't get stuck in the wall
-            let allowed_distance=180.0;
-            let pen=distance-allowed_distance;
-            self.x -= pen * nx;
-            self.y -= pen * ny;
-      
-            (nx,ny)
-        }else {
-            (0.0,0.0)
-        }
+   fn check_collision(&mut self, circle: &Big_Circle) {
+    let gravity = 500.0;
+    let dt = get_frame_time();
 
+    // Gravity
+    self.vy += gravity * dt;
+
+    // Move ball
+    self.x += self.vx * dt;
+    self.y += self.vy * dt;
+
+    // Position relative to moving circle
+    let dx = self.x - circle.x;
+    let dy = self.y - circle.y;
+
+    let distance = (dx * dx + dy * dy).sqrt();
+
+    let allowed_distance = circle.radius - self.radius;
+
+    if distance > allowed_distance {
+        // Normal pointing from circle center -> ball
+        let nx = dx / distance;
+        let ny = dy / distance;
+
+        // Push ball back inside
+        let penetration = distance - allowed_distance;
+
+        self.x -= nx * penetration;
+        self.y -= ny * penetration;
+
+        // -------------------------
+        // Relative velocity
+        // -------------------------
+
+        let relative_vx = self.vx - circle.vx;
+        let relative_vy = self.vy - circle.vy;
+
+        // Velocity along collision normal
+        let dot = relative_vx * nx + relative_vy * ny;
+
+        let restitution = 0.8;
+
+        // Bounce relative velocity
+        let new_relative_vx =
+            relative_vx - (1.0 + restitution) * dot * nx;
+
+        let new_relative_vy =
+            relative_vy - (1.0 + restitution) * dot * ny;
+
+        // Convert back to world velocity
+        self.vx = new_relative_vx + circle.vx;
+        self.vy = new_relative_vy + circle.vy;
     }
 }
+    }
+
 
 #[macroquad::main("Circle Collision")]
 async fn main() {
     // Note: vx and vy act as the continuous speed *and* the manual keyboard push force
-    let mut ball = Ball::new(20.0, 400.0, 300.0, 4.0, 4.0);
+    let mut ball = Ball::new(10.0, 400.0, 300.0, 4.0, 4.0);
+    let mut big_circle=Big_Circle::new(200.0,400.0,300.0,4.0,4.0);
 
     loop {
         clear_background(BLACK);
 
         // Draw the outer container ring
-        draw_circle_lines(400.0, 300.0, 200.0, 3.0, WHITE);
+        draw_circle_lines(big_circle.x, big_circle.y, big_circle.radius, 3.0, WHITE);
         
         // Draw the player ball
-        draw_circle(ball.x, ball.y, ball.radius, BLUE);
+        draw_circle(ball.x, ball.y, ball.radius, WHITE);
 
         // Handle keyboard movement overrides
         if is_key_down(KeyCode::Up) {
-            ball.move_ball_up();
+            big_circle.move_circle_up();
         }
         if is_key_down(KeyCode::Down) {
-            ball.move_ball_down();
+            big_circle.move_circle_down();
         }
         if is_key_down(KeyCode::Left) {
-            ball.move_ball_left();
+            big_circle.move_circle_left();
         }   
         if is_key_down(KeyCode::Right) {
-            ball.move_ball_right();
+          big_circle.move_circle_right();
         }
 
         // Run the physics check and update bounces automatically
-        ball.check_collision();
+        ball.check_collision(&big_circle);
+        big_circle.border_check();
 
         next_frame().await;
     }
